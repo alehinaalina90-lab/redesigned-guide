@@ -1,0 +1,434 @@
+<<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Крестики-нолики - с компьютером!</title>
+    <style>
+        body {
+            text-align: center;
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 0;
+        }
+        
+        .game-container {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+        }
+        
+        h1 {
+            color: #333;
+            margin: 0 0 10px 0;
+        }
+        
+        .score {
+            display: flex;
+            justify-content: space-around;
+            margin: 20px 0;
+            gap: 20px;
+        }
+        
+        .score-card {
+            background: #f0f0f0;
+            padding: 10px 20px;
+            border-radius: 10px;
+            text-align: center;
+        }
+        
+        .score-card h3 {
+            margin: 0;
+            color: #666;
+            font-size: 14px;
+        }
+        
+        .score-card .value {
+            font-size: 28px;
+            font-weight: bold;
+            margin: 5px 0 0;
+        }
+        
+        .player-score { color: #e74c3c; }
+        .computer-score { color: #3498db; }
+        .draw-score { color: #666; }
+        
+        .status {
+            font-size: 24px;
+            margin: 20px 0;
+            padding: 10px;
+            border-radius: 10px;
+            background: #f0f0f0;
+            color: #333;
+        }
+        
+        .mode-selector {
+            margin: 15px 0;
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+        }
+        
+        .mode-btn {
+            padding: 8px 20px;
+            font-size: 14px;
+            background: #ddd;
+            color: #333;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        
+        .mode-btn.active {
+            background: #667eea;
+            color: white;
+        }
+        
+        .board {
+            display: grid;
+            grid-template-columns: repeat(3, 100px);
+            grid-template-rows: repeat(3, 100px);
+            gap: 5px;
+            background: #333;
+            border: 5px solid #333;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        
+        .cell {
+            background: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 48px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        
+        .cell:hover {
+            background: #f0f0f0;
+        }
+        
+        .cell.x {
+            color: #e74c3c;
+        }
+        
+        .cell.o {
+            color: #3498db;
+        }
+        
+        button {
+            margin-top: 20px;
+            padding: 10px 30px;
+            font-size: 18px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        
+        button:hover {
+            background: #764ba2;
+        }
+        
+        .winner {
+            animation: win 0.5s ease;
+        }
+        
+        @keyframes win {
+            0%, 100% { background: gold; }
+            50% { background: orange; }
+        }
+        
+        .computer-thinking {
+            opacity: 0.5;
+            cursor: wait;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <h1>Крестики-нолики</h1>
+        
+        <div class="mode-selector">
+            <button class="mode-btn active" onclick="setMode('twoPlayer')">👥 Два игрока</button>
+            <button class="mode-btn" onclick="setMode('vsComputer')">🤖 Против компьютера</button>
+        </div>
+        
+        <div class="score">
+            <div class="score-card">
+                <h3>Игрок (❌)</h3>
+                <div class="value player-score" id="playerScore">0</div>
+            </div>
+            <div class="score-card">
+                <h3>Ничьи</h3>
+                <div class="value draw-score" id="drawScore">0</div>
+            </div>
+            <div class="score-card">
+                <h3>Компьютер (⭕)</h3>
+                <div class="value computer-score" id="computerScore">0</div>
+            </div>
+        </div>
+        
+        <div class="status" id="status">Ход игрока: ❌</div>
+        <div class="board" id="board"></div>
+        <button onclick="resetGame()">Новая игра</button>
+    </div>
+
+    <script>
+        // Игровые переменные
+        let board = ['', '', '', '', '', '', '', '', ''];
+        let currentPlayer = 'X';
+        let gameActive = true;
+        let gameMode = 'twoPlayer'; // 'twoPlayer' или 'vsComputer'
+        let isComputerThinking = false;
+        
+        // Счёт
+        let scores = {
+            player: 0,
+            computer: 0,
+            draw: 0
+        };
+        
+        const boardElement = document.getElementById('board');
+        const statusElement = document.getElementById('status');
+        
+        // Победные комбинации
+        const winPatterns = [
+            [0, 1, 2], [3, 4, 5], [6, 7, 8],
+            [0, 3, 6], [1, 4, 7], [2, 5, 8],
+            [0, 4, 8], [2, 4, 6]
+        ];
+        
+        // Создание игрового поля
+        function createBoard() {
+            boardElement.innerHTML = '';
+            for (let i = 0; i < 9; i++) {
+                const cell = document.createElement('div');
+                cell.classList.add('cell');
+                if (board[i] === 'X') cell.classList.add('x');
+                if (board[i] === 'O') cell.classList.add('o');
+                cell.textContent = board[i];
+                cell.dataset.index = i;
+                cell.addEventListener('click', () => handleCellClick(i));
+                boardElement.appendChild(cell);
+            }
+        }
+        
+        // Обработчик клика
+        function handleCellClick(index) {
+            if (board[index] === '' && gameActive && !isComputerThinking) {
+                if (gameMode === 'vsComputer' && currentPlayer === 'O') return;
+                
+                makeMove(index);
+                
+                if (gameActive && gameMode === 'vsComputer' && currentPlayer === 'O') {
+                    computerMove();
+                }
+            }
+        }
+        
+        // Совершить ход
+        function makeMove(index) {
+            board[index] = currentPlayer;
+            updateBoardDisplay();
+            
+            if (checkWinner()) {
+                gameActive = false;
+                const winner = currentPlayer === 'X' ? 'Игрок' : (gameMode === 'twoPlayer' ? 'Игрок O' : 'Компьютер');
+                statusElement.textContent = `${winner} победил! 🎉`;
+                highlightWinner();
+                
+                if (currentPlayer === 'X') {
+                    scores.player++;
+                    updateScoreDisplay();
+                } else if (currentPlayer === 'O') {
+                    scores.computer++;
+                    updateScoreDisplay();
+                }
+                return;
+            }
+            
+            if (checkDraw()) {
+                gameActive = false;
+                statusElement.textContent = 'Ничья! 🤝';
+                scores.draw++;
+                updateScoreDisplay();
+                return;
+            }
+            
+            currentPlayer = currentPlayer === 'X' ? 'O' : 'X';
+            updateMessage();
+        }
+        
+        // Ход компьютера (умный ИИ)
+        function computerMove() {
+            if (!gameActive || currentPlayer !== 'O') return;
+            
+            isComputerThinking = true;
+            statusElement.textContent = 'Компьютер думает... 🤔';
+            
+            setTimeout(() => {
+                let move = getBestMove();
+                
+                if (move !== -1) {
+                    makeMove(move);
+                }
+                
+                isComputerThinking = false;
+                updateMessage();
+            }, 300);
+        }
+        
+        // Умный ИИ - выбирает лучший ход
+        function getBestMove() {
+            // 1. Победа компьютера
+            for (let i = 0; i < 9; i++) {
+                if (board[i] === '') {
+                    board[i] = 'O';
+                    if (checkWinner()) {
+                        board[i] = '';
+                        return i;
+                    }
+                    board[i] = '';
+                }
+            }
+            
+            // 2. Блокировка победы игрока
+            for (let i = 0; i < 9; i++) {
+                if (board[i] === '') {
+                    board[i] = 'X';
+                    if (checkWinner()) {
+                        board[i] = '';
+                        return i;
+                    }
+                    board[i] = '';
+                }
+            }
+            
+            // 3. Занимаем центр
+            if (board[4] === '') return 4;
+            
+            // 4. Занимаем углы
+            const corners = [0, 2, 6, 8];
+            const availableCorners = corners.filter(i => board[i] === '');
+            if (availableCorners.length > 0) {
+                return availableCorners[Math.floor(Math.random() * availableCorners.length)];
+            }
+            
+            // 5. Любой доступный ход
+            const availableMoves = [];
+            for (let i = 0; i < 9; i++) {
+                if (board[i] === '') availableMoves.push(i);
+            }
+            
+            return availableMoves.length > 0 ? availableMoves[Math.floor(Math.random() * availableMoves.length)] : -1;
+        }
+        
+        // Обновление отображения поля
+        function updateBoardDisplay() {
+            const cells = document.querySelectorAll('.cell');
+            for (let i = 0; i < 9; i++) {
+                cells[i].textContent = board[i];
+                cells[i].classList.remove('x', 'o');
+                if (board[i] === 'X') cells[i].classList.add('x');
+                if (board[i] === 'O') cells[i].classList.add('o');
+            }
+        }
+        
+        // Проверка победителя
+        function checkWinner() {
+            for (let pattern of winPatterns) {
+                const [a, b, c] = pattern;
+                if (board[a] && board[a] === board[b] && board[a] === board[c]) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        
+        // Подсветка победных ячеек
+        function highlightWinner() {
+            for (let pattern of winPatterns) {
+                const [a, b, c] = pattern;
+                if (board[a] && board[a] === board[b] && board[a] === board[c]) {
+                    const cells = document.querySelectorAll('.cell');
+                    cells[a].classList.add('winner');
+                    cells[b].classList.add('winner');
+                    cells[c].classList.add('winner');
+                    break;
+                }
+            }
+        }
+        
+        // Проверка ничьей
+        function checkDraw() {
+            return board.every(cell => cell !== '');
+        }
+        
+        // Обновление сообщения
+        function updateMessage() {
+            if (!gameActive) return;
+            
+            if (currentPlayer === 'X') {
+                statusElement.textContent = 'Ход игрока: ❌';
+            } else {
+                if (gameMode === 'twoPlayer') {
+                    statusElement.textContent = 'Ход игрока: ⭕';
+                } else {
+                    statusElement.textContent = 'Ход компьютера: ⭕';
+                }
+            }
+        }
+        
+        // Обновление счёта
+        function updateScoreDisplay() {
+            document.getElementById('playerScore').textContent = scores.player;
+            document.getElementById('computerScore').textContent = scores.computer;
+            document.getElementById('drawScore').textContent = scores.draw;
+        }
+        
+        // Сброс игры
+        function resetGame() {
+            board = ['', '', '', '', '', '', '', '', ''];
+            gameActive = true;
+            currentPlayer = 'X';
+            createBoard();
+            updateMessage();
+            
+            // Если играем с компьютером и компьютер ходит первым
+            if (gameMode === 'vsComputer' && currentPlayer === 'O') {
+                setTimeout(() => computerMove(), 500);
+            }
+        }
+        
+        // Смена режима игры
+        function setMode(mode) {
+            gameMode = mode;
+            
+            // Обновляем активную кнопку
+            document.querySelectorAll('.mode-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+            
+            // Сбрасываем игру
+            scores = { player: 0, computer: 0, draw: 0 };
+            updateScoreDisplay();
+            resetGame();
+        }
+        
+        // Запуск игры
+        createBoard();
+        updateMessage();
+    </script>
+</body>
+</html>
